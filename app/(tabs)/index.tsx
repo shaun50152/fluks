@@ -1,98 +1,155 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { DecisionCard, DecisionCardSkeleton } from '@/components/decision-card/DecisionCard';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { ErrorCard } from '@/components/ui/ErrorCard';
+import { useMealWindow } from '@/hooks/use-meal-window';
+import { useScheduleStore } from '@/stores/schedule.store';
+import { usePantryStore } from '@/stores/pantry.store';
+import { useProfileStore } from '@/stores/profile.store';
+import { getDecisionCandidates } from '@/lib/recommendation-engine';
+import { BrandColors, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import type { DecisionCandidate, Recipe, UserSignalVector } from '@/types/domain';
+import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/auth.store';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+function HomeScreenContent() {
+  const { activeMealWindow, nextMealWindow, minutesUntilNext } = useMealWindow();
+  const { fetchSchedule } = useScheduleStore();
+  const { items: pantryItems, fetchPantry } = usePantryStore();
+  const { profile } = useProfileStore();
+  const { userId } = useAuthStore();
+
+  const [candidates, setCandidates] = useState<DecisionCandidate[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await Promise.all([fetchSchedule(), fetchPantry()]);
+        const { data: recipes, error: recipesError } = await supabase
+          .from('recipes')
+          .select('*')
+          .limit(50);
+        if (recipesError) throw new Error(recipesError.message);
+
+        if (!activeMealWindow || !recipes?.length) {
+          setCandidates([]);
+          return;
+        }
+
+        const signals: UserSignalVector = {
+          userId: userId ?? '',
+          goals: profile?.goals ?? [],
+          dietaryTags: profile?.dietaryTags ?? [],
+          pantryItems,
+          recentEvents: [],
+          mealWindow: activeMealWindow,
+        };
+
+        const ranked = getDecisionCandidates(signals, recipes as Recipe[]);
+        setCandidates(ranked);
+        setCurrentIndex(0);
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load recommendations');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    load();
+  }, [activeMealWindow?.id]);
+
+  const handleCookNow = () => {
+    const candidate = candidates[currentIndex];
+    if (!candidate) return;
+    router.push(`/recipe/${candidate.recipe.id}`);
+  };
+
+  const handleDismiss = () => {
+    setCurrentIndex((i) => Math.min(i + 1, candidates.length - 1));
+  };
+
+  const handleSave = () => {
+    // TODO (task 5.4): wire up savedStore.saveEntity
+  };
+
+  if (isLoading) {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <DecisionCardSkeleton />
+      </ScrollView>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <ErrorCard title="Something went wrong" message={error} onRetry={() => setError(null)} />
+      </View>
+    );
+  }
+
+  const currentCandidate = candidates[currentIndex];
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {activeMealWindow && currentCandidate ? (
+        <DecisionCard
+          recipe={currentCandidate.recipe}
+          mealWindow={activeMealWindow}
+          missingIngredients={currentCandidate.missingIngredients}
+          onCookNow={handleCookNow}
+          onDismiss={handleDismiss}
+          onSave={handleSave}
+        />
+      ) : (
+        <NextMealPrompt
+          windowName={nextMealWindow?.windowName ?? 'next meal'}
+          minutesUntilNext={minutesUntilNext}
+        />
+      )}
+    </ScrollView>
+  );
+}
+
+function NextMealPrompt({ windowName, minutesUntilNext }: { windowName: string; minutesUntilNext: number }) {
+  const hours = Math.floor(minutesUntilNext / 60);
+  const mins = minutesUntilNext % 60;
+  const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+  return (
+    <View style={styles.nextMealContainer}>
+      <Text style={styles.nextMealEmoji}>⏰</Text>
+      <Text style={styles.nextMealTitle}>Next up: {windowName}</Text>
+      <Text style={styles.nextMealSubtitle}>Starting in {timeStr}</Text>
+    </View>
+  );
+}
 
 export default function HomeScreen() {
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
-
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <ErrorBoundary>
+      <HomeScreenContent />
+    </ErrorBoundary>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: { flex: 1, backgroundColor: BrandColors.background },
+  content: { padding: Spacing.md, paddingTop: Spacing.lg },
+  nextMealContainer: {
+    flex: 1,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    paddingTop: 80,
+    gap: Spacing.sm,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+  nextMealEmoji: { fontSize: 48 },
+  nextMealTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold as any, color: BrandColors.text },
+  nextMealSubtitle: { fontSize: FontSize.md, color: BrandColors.textSecondary },
 });
