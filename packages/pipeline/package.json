@@ -1,0 +1,40 @@
+{
+  "name": "@foodos/pipeline",
+  "version": "1.0.0",
+  "description": "Recipe Ingestion and Enrichment Pipeline for FoodOS",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "jest --passWithNoTests",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "migrate": "ts-node src/migrations/run-migrations.ts",
+    "ingest": "ts-node src/index.ts"
+  },
+  "keywords": [
+    "recipe",
+    "ingestion",
+    "nutrition",
+    "pipeline"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.103.3",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.6.0",
+    "dotenv": "^17.4.2",
+    "fast-check": "^4.7.0",
+    "jest": "^30.3.0",
+    "p-limit": "^7.3.0",
+    "ts-jest": "^29.4.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/nock": "^10.0.3",
+    "nock": "^14.0.12"
+  }
+}

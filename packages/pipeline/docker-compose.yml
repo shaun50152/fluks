@@ -1,0 +1,80 @@
+# Docker Compose configuration for Recipe Ingestion Pipeline
+# Includes local Supabase for testing
+
+version: '3.8'
+
+services:
+  # Recipe Pipeline Service
+  recipe-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recipe-pipeline
+    environment:
+      # USDA API Key (required)
+      USDA_API_KEY: ${USDA_API_KEY}
+      
+      # Supabase Configuration
+      SUPABASE_URL: ${SUPABASE_URL:-http://supabase-kong:8000}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      
+      # Pipeline Configuration (optional)
+      RECIPE_FETCH_LIMIT: ${RECIPE_FETCH_LIMIT:-100}
+      RECIPE_BATCH_SIZE: ${RECIPE_BATCH_SIZE:-10}
+      REFRESH_MODE: ${REFRESH_MODE:-false}
+      STALENESS_THRESHOLD_DAYS: ${STALENESS_THRESHOLD_DAYS:-90}
+      USDA_CONCURRENCY_LIMIT: ${USDA_CONCURRENCY_LIMIT:-5}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      - supabase-db
+    networks:
+      - recipe-pipeline-network
+    volumes:
+      # Mount logs directory for persistence
+      - ./logs:/app/logs
+    restart: on-failure
+
+  # Local Supabase Database (for testing)
+  supabase-db:
+    image: supabase/postgres:15.1.0.117
+    container_name: supabase-db
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your-super-secret-and-long-postgres-password}
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - recipe-pipeline-network
+    volumes:
+      - supabase-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Supabase Kong API Gateway (for testing)
+  supabase-kong:
+    image: kong:2.8.1
+    container_name: supabase-kong
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+    ports:
+      - "8000:8000"
+    networks:
+      - recipe-pipeline-network
+    depends_on:
+      - supabase-db
+    volumes:
+      - ./docker/kong.yml:/var/lib/kong/kong.yml:ro
+
+networks:
+  recipe-pipeline-network:
+    driver: bridge
+
+volumes:
+  supabase-db-data:
+    driver: local

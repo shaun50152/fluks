@@ -1,0 +1,39 @@
+{
+  "name": "foodos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FoodOS - Fitness-first food intelligence platform",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "mobile": "npm run start --workspace=@foodos/mobile",
+    "mobile:ios": "npm run ios --workspace=@foodos/mobile",
+    "mobile:android": "npm run android --workspace=@foodos/mobile",
+    "mobile:web": "npm run web --workspace=@foodos/mobile",
+    "mobile:test": "npm test --workspace=@foodos/mobile",
+    "pipeline": "npm run dev --workspace=@foodos/pipeline",
+    "pipeline:ingest": "npm run ingest --workspace=@foodos/pipeline",
+    "pipeline:migrate": "npm run migrate --workspace=@foodos/pipeline",
+    "pipeline:test": "npm test --workspace=@foodos/pipeline",
+    "pipeline:build": "npm run build --workspace=@foodos/pipeline",
+    "test": "npm test --workspaces --if-present",
+    "test:coverage": "npm run test:coverage --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present && rm -rf node_modules",
+    "install:all": "npm install"
+  },
+  "keywords": [
+    "food",
+    "fitness",
+    "nutrition",
+    "mobile-app",
+    "react-native",
+    "expo"
+  ],
+  "author": "FoodOS Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
